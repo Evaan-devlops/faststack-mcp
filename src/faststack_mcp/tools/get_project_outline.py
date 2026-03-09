@@ -4,6 +4,10 @@ from collections import defaultdict
 
 from ..storage import load_project
 
+# Cache keyed by project_id -> (fingerprint, result)
+# Avoids recomputing the outline when the project hasn't changed.
+_cache: dict[str, tuple[str, dict]] = {}
+
 
 def _normalize_path(file_path: str) -> str:
     return file_path.replace("\\", "/").lower()
@@ -84,6 +88,9 @@ def _symbol_bucket(kind: str) -> str | None:
 
 def run(project_id: str) -> dict[str, object]:
     project = load_project(project_id)
+    cached = _cache.get(project_id)
+    if cached and cached[0] == project.fingerprint:
+        return cached[1]
     groups: dict[str, list[dict[str, object]]] = {
         "backend_routes": [],
         "backend_models_services_repos": [],
@@ -187,10 +194,12 @@ def run(project_id: str) -> dict[str, object]:
 
         _append(groups, bucket, _file_entry(file_record.path, "frontend_file", metadata))
 
-    return {
+    result: dict[str, object] = {
         "project_id": project_id,
         "project_path": project.project_path,
         "languages": project.stats.languages,
         "frameworks": project.stats.frameworks,
         "outline": groups,
     }
+    _cache[project_id] = (project.fingerprint, result)
+    return result
