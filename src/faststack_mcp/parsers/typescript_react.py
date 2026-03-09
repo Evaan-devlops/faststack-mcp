@@ -120,7 +120,8 @@ def _infer_frontend_category(path: Path) -> str | None:
         return "hooks"
     if "features" in parts:
         feature_idx = parts.index("features")
-        if feature_idx >= 0 and "api" in parts[feature_idx + 1 :]:
+        remaining = parts[feature_idx + 1 :]
+        if "api" in remaining or any(p.split(".")[0] == "api" for p in remaining):
             return "api"
         return "features"
     if "store" in parts or "stores" in parts:
@@ -180,6 +181,7 @@ def _to_symbol(
     file_category: str | None = None,
     parser_name: str | None = None,
     synthetic: bool = False,
+    qualified_name: str | None = None,
 ) -> Symbol:
     start_line, end_line = _line_numbers(node)
     byte_start, byte_end = _byte_range(node, source, offsets)
@@ -200,7 +202,7 @@ def _to_symbol(
     return Symbol(
         id=make_symbol_id(file_path.as_posix(), name, kind),
         name=name,
-        qualified_name=name,
+        qualified_name=qualified_name if qualified_name is not None else name,
         kind=kind,
         language=language,
         file_path=file_path.as_posix(),
@@ -272,10 +274,12 @@ def _add_file_scope_symbol(
     mapped = kind_map.get(category)
     if mapped is None:
         return
+    short_kind = mapped.replace("frontend_", "")
     symbols.append(
         _to_symbol(
             file_path=file_path,
             name=f"{file_path.stem}_{mapped}",
+            qualified_name=f"{file_path.stem}_{short_kind}",
             kind=mapped,
             node=_make_fake_node(file_path),
             source="",
@@ -620,6 +624,8 @@ def _regex_parse(file_path: Path, source: str, offsets: list[int]) -> list[Symbo
 
     for match in ARROW_HOOK_RE.finditer(source):
         name = match.group(1)
+        if not _is_hook_name(name):
+            continue
         if any(item.name == name for item in symbols):
             continue
         line_no = source[:match.start(1)].count("\n") + 1

@@ -30,6 +30,15 @@ from ..utils.hashing import file_hash, project_id_for_path
 
 MAX_FILE_SIZE = DEFAULT_MAX_FILE_SIZE_BYTES
 
+_PARSER_NAMES = {
+    parse_config: "parse_config",
+    parse_env: "parse_env",
+    parse_json: "parse_json",
+    parse_python: "parse_python",
+    parse_sql: "parse_sql",
+    parse_typescript: "parse_typescript",
+}
+
 _TS_FILE_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx"}
 _JSON_EXTENSIONS = {".json", ".jsonl"}
 _CONFIG_FILE_EXTENSIONS = {".toml", ".ini", ".yaml", ".yml"}
@@ -302,7 +311,7 @@ def run(folder_path: str, force: bool = False, max_file_size: int | None = None,
                     parser_results[symbol.id] = symbol
 
             metadata: dict[str, object] = {
-                "parser": parser.__name__,
+                "parser": _PARSER_NAMES.get(parser, parser.__name__),
             }
             if full.name.lower() == ".env.example":
                 metadata["env_template"] = True
