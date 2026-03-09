@@ -17,7 +17,7 @@ from ..scanners.filters import (
     is_binary_file,
     is_env_file,
     is_excluded_dir,
-    is_exlicit_config,
+    is_explicit_config,
     is_rag_artifact,
     is_sensitive_file,
     is_supported_path,
@@ -83,7 +83,7 @@ def _parser_for_path(path: Path, include_env_files: bool):
     if lower_name in {"manifest.json", "chunks.jsonl"}:
         return parse_json
 
-    if is_exlicit_config(path) or lower_name in _EXPLICIT_CONFIG_JSON_FILES:
+    if is_explicit_config(path) or lower_name in _EXPLICIT_CONFIG_JSON_FILES:
         return parse_config
 
     if lower_name.startswith("tsconfig") and lower_name.endswith(".json"):
