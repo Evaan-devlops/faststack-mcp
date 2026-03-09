@@ -138,8 +138,9 @@ def _compute_signature(path: Path, include_env_files: bool) -> str:
         if not is_supported_path(child):
             continue
         try:
+            st = child.stat()
             records.append(
-                f"{child.relative_to(path).as_posix()}:{child.stat().st_size}:{child.stat().st_mtime_ns}"
+                f"{child.relative_to(path).as_posix()}:{st.st_size}:{st.st_mtime_ns}"
             )
         except OSError:
             continue
@@ -193,10 +194,11 @@ def run(folder_path: str, force: bool = False, max_file_size: int | None = None,
     max_file_size = max_file_size or MAX_FILE_SIZE
     cache_file = cache_root() / "projects" / project_id / "index.json"
 
-    signature = _compute_signature(root, include_env_files)
+    signature: str | None = None
     if cache_file.exists() and not force:
         try:
             existing = load_project(project_id)
+            signature = _compute_signature(root, include_env_files)
             if existing.fingerprint == signature:
                 return {
                     "project_id": existing.project_id,
@@ -209,6 +211,9 @@ def run(folder_path: str, force: bool = False, max_file_size: int | None = None,
                 }
         except Exception:
             pass
+
+    if signature is None:
+        signature = _compute_signature(root, include_env_files)
 
     parser_results: dict[str, Symbol] = {}
     file_records: dict[str, FileRecord] = {}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import re
 from pathlib import Path
 from typing import Any
@@ -331,6 +332,7 @@ def _set_parser_language(parser: Any, language: Any) -> bool:
         return False
 
 
+@functools.lru_cache(maxsize=4)
 def _load_tree_sitter_parser(file_ext: str):
     try:
         from tree_sitter import Parser  # type: ignore

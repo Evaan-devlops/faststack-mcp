@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import json
 import shutil
 from pathlib import Path
 
 import orjson
 
 from .config import DEFAULT_CACHE_ROOT, INDEX_FILE_NAME, PROJECTS_DIR_NAME
-from .models import ProjectIndex
+from .models import ProjectIndex, ProjectStats
 
 
 class StorageError(RuntimeError):
@@ -36,8 +35,7 @@ def load_project(project_id: str) -> ProjectIndex:
     path = project_index_path(project_id)
     if not path.exists():
         raise StorageError(f"Project not found: {project_id}")
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    return ProjectIndex.model_validate(payload)
+    return ProjectIndex.model_validate(orjson.loads(path.read_bytes()))
 
 
 def save_project(index: ProjectIndex) -> None:
@@ -61,7 +59,24 @@ def list_projects() -> list[ProjectIndex]:
         if not idx.exists():
             continue
         try:
-            result.append(load_project(entry.name))
+            data = orjson.loads(idx.read_bytes())
+            stats_data = data.get("stats", {})
+            proj = ProjectIndex.model_construct(
+                project_id=data["project_id"],
+                project_path=data["project_path"],
+                indexed_at=data.get("indexed_at", ""),
+                fingerprint=data.get("fingerprint", ""),
+                files={},
+                symbols={},
+                errors=[],
+                stats=ProjectStats(
+                    files_indexed=stats_data.get("files_indexed", 0),
+                    symbols_indexed=stats_data.get("symbols_indexed", 0),
+                    languages=stats_data.get("languages", []),
+                    frameworks=stats_data.get("frameworks", []),
+                ),
+            )
+            result.append(proj)
         except Exception:
             continue
     return result
