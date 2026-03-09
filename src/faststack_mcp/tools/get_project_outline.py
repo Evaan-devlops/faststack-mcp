@@ -19,12 +19,10 @@ def _append(bucket: dict[str, list[dict[str, object]]], group: str, item: dict[s
 
 def _symbol_entry(symbol) -> dict[str, object]:
     return {
-        "symbol_id": symbol.id,
         "name": symbol.name,
         "kind": symbol.kind,
         "file_path": symbol.file_path,
         "line_start": symbol.line_start,
-        "metadata": symbol.metadata,
     }
 
 
@@ -34,7 +32,9 @@ def _file_entry(file_path: str, kind: str, metadata: dict[str, object] | None = 
         "kind": kind,
         "line_start": 1,
     }
-    if metadata:
+    # only RAG artifacts carry metadata in the outline — all other entries omit it
+    # to keep the outline compact (metadata is available via get_symbol if needed)
+    if metadata and kind == "rag_artifact":
         payload["metadata"] = metadata
     return payload
 
@@ -194,12 +194,16 @@ def run(project_id: str) -> dict[str, object]:
 
         _append(groups, bucket, _file_entry(file_record.path, "frontend_file", metadata))
 
+    counts = {section: len(items) for section, items in groups.items() if items}
+    # omit empty sections — no value in transmitting 12 empty arrays
+    compact_groups = {k: v for k, v in groups.items() if v}
     result: dict[str, object] = {
         "project_id": project_id,
         "project_path": project.project_path,
         "languages": project.stats.languages,
         "frameworks": project.stats.frameworks,
-        "outline": groups,
+        "counts": counts,
+        "outline": compact_groups,
     }
     _cache[project_id] = (project.fingerprint, result)
     return result
