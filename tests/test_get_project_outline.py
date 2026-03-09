@@ -1,8 +1,12 @@
 from pathlib import Path
 
 from faststack_mcp.storage import load_project
-from faststack_mcp.tools.get_project_outline import run as get_project_outline
+from faststack_mcp.tools.get_project_outline import _ALL_SECTIONS, run as get_project_outline
 from faststack_mcp.tools.index_folder import run as index_folder
+
+
+def _all_outline(project_id: str) -> dict:
+    return get_project_outline(project_id, sections=list(_ALL_SECTIONS))["outline"]
 
 
 def _write_files(base: Path) -> None:
@@ -26,8 +30,7 @@ def test_outline_groups_frontend_backend_env_and_artifacts(tmp_path: Path):
     _write_files(tmp_path)
     result = index_folder(str(tmp_path), include_env_files=True)
 
-    outline = get_project_outline(result["project_id"])
-    groups = outline["outline"]
+    groups = _all_outline(result["project_id"])
 
     assert "backend_routes" in groups
     assert "frontend_components" in groups
@@ -57,7 +60,7 @@ def test_outline_fallback_frontend_path_bucketing(tmp_path: Path):
     (project / "src/lib/http/client.ts").write_text("const http = 1\n")
 
     result = index_folder(str(project))
-    groups = get_project_outline(result["project_id"])["outline"]
+    groups = _all_outline(result["project_id"])
 
     assert any(item["file_path"] == "src/hooks/legacy.ts" for item in groups["frontend_hooks"])
     assert any(item["file_path"] == "src/store/session.ts" for item in groups["frontend_store"])
@@ -78,7 +81,7 @@ def test_rag_artifact_outline_classification(tmp_path: Path):
 
     result = index_folder(str(project), include_env_files=False)
     project_record = load_project(result["project_id"])
-    groups = get_project_outline(result["project_id"])["outline"]
+    groups = _all_outline(result["project_id"])
 
     assert sorted(item["metadata"]["rag_artifact_type"] for item in groups["rag_artifacts"]) == [
         "chunks_jsonl",

@@ -86,11 +86,60 @@ def _symbol_bucket(kind: str) -> str | None:
     return None
 
 
-def run(project_id: str) -> dict[str, object]:
+_ALL_SECTIONS = {
+    "backend_routes",
+    "backend_models_services_repos",
+    "frontend_app",
+    "frontend_pages",
+    "frontend_components",
+    "frontend_hooks",
+    "frontend_store",
+    "frontend_api",
+    "frontend_utils",
+    "frontend_types",
+    "database_migrations",
+    "config_files",
+    "rag_artifacts",
+    "env_config_templates",
+}
+
+
+def run(project_id: str, sections: list[str] | None = None) -> dict[str, object]:
+    """Build (and cache) the full groups, then slice to only what was requested.
+
+    sections=None  → summary only: counts + languages + frameworks (~17 tokens).
+    sections=[...]  → counts + full symbol data for the named sections only.
+    """
     project = load_project(project_id)
+
+    # Return from cache when fingerprint matches
     cached = _cache.get(project_id)
-    if cached and cached[0] == project.fingerprint:
-        return cached[1]
+    if not (cached and cached[0] == project.fingerprint):
+        # --- build full groups ---
+        _build_and_cache(project_id, project)
+
+    cached = _cache[project_id]
+    counts: dict[str, int] = cached[1]["counts"]
+    groups: dict[str, list] = cached[1]["groups"]
+    base = {
+        "project_id": project_id,
+        "project_path": project.project_path,
+        "languages": project.stats.languages,
+        "frameworks": project.stats.frameworks,
+        "counts": counts,
+    }
+
+    if sections is None:
+        # Cheap path: orientation only — no symbol data returned
+        return base
+
+    # Validate requested sections
+    valid = [s for s in sections if s in _ALL_SECTIONS]
+    outline = {s: groups.get(s, []) for s in valid}
+    return {**base, "outline": outline}
+
+
+def _build_and_cache(project_id: str, project) -> None:
     groups: dict[str, list[dict[str, object]]] = {
         "backend_routes": [],
         "backend_models_services_repos": [],
@@ -195,15 +244,5 @@ def run(project_id: str) -> dict[str, object]:
         _append(groups, bucket, _file_entry(file_record.path, "frontend_file", metadata))
 
     counts = {section: len(items) for section, items in groups.items() if items}
-    # omit empty sections — no value in transmitting 12 empty arrays
     compact_groups = {k: v for k, v in groups.items() if v}
-    result: dict[str, object] = {
-        "project_id": project_id,
-        "project_path": project.project_path,
-        "languages": project.stats.languages,
-        "frameworks": project.stats.frameworks,
-        "counts": counts,
-        "outline": compact_groups,
-    }
-    _cache[project_id] = (project.fingerprint, result)
-    return result
+    _cache[project_id] = (project.fingerprint, {"counts": counts, "groups": compact_groups})

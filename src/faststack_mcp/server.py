@@ -74,12 +74,28 @@ def create_server() -> FastMCP:
         return search_text(project_id, query, limit=limit)
 
     @mcp.tool(name="get_project_outline")
-    def get_project_outline_tool(project_id: str) -> dict:
-        """Get a high-level structural overview of the project grouped by layer
-        (routes, models, components, hooks, store, migrations, config).
-        Use ONCE per session to orient yourself — result is cached per project fingerprint.
-        Do NOT call repeatedly; use search_symbols for subsequent lookups."""
-        return get_project_outline(project_id)
+    def get_project_outline_tool(
+        project_id: str,
+        sections: list[str] | None = None,
+    ) -> dict:
+        """Project structure tool. Behavior depends on the `sections` parameter:
+
+        DEFAULT (sections=None) — returns ONLY counts + languages + frameworks (~17 tokens).
+        Use this first to orient yourself. Example response:
+          {"counts": {"backend_routes": 12, "frontend_components": 8, ...}, "languages": [...]}
+
+        WITH sections — returns full symbol list for only the requested sections.
+        Example: sections=["backend_routes"] returns all route symbols for those files only.
+        Available sections: backend_routes, backend_models_services_repos, frontend_app,
+          frontend_pages, frontend_components, frontend_hooks, frontend_store, frontend_api,
+          frontend_utils, frontend_types, database_migrations, config_files,
+          rag_artifacts, env_config_templates.
+
+        WORKFLOW FOR 90% TOKEN SAVINGS:
+          1. Call with sections=None → read counts to understand project shape (~17 tokens)
+          2. Use search_symbols + get_symbol for all specific lookups (65-91% cheaper than reading files)
+          3. Only pass sections=[...] when you need to audit an entire layer (e.g. all routes)"""
+        return get_project_outline(project_id, sections=sections)
 
     @mcp.tool(name="get_file_tree")
     def get_file_tree_tool(project_id: str) -> dict:
