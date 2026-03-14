@@ -7,6 +7,7 @@ from .tools.get_file_outline import run as get_file_outline
 from .tools.get_file_tree import run as get_file_tree
 from .tools.get_project_outline import run as get_project_outline
 from .tools.get_symbol import run as get_symbol
+from .tools.get_token_usage import run as get_token_usage
 from .tools.index_folder import run as index_folder
 from .tools.invalidate_cache import run as invalidate_cache
 from .tools.list_projects import run as list_projects
@@ -116,6 +117,15 @@ def create_server() -> FastMCP:
         """Force-remove the cached index for a project. Use when the project has changed
         significantly and index_folder with force=True is not enough."""
         return invalidate_cache(project_id)
+
+    @mcp.tool(name="get_token_usage")
+    def get_token_usage_tool(last_n: int = 20, session_id: str | None = None) -> dict:
+        """Show token consumption per Claude Code session.
+        Reads the log written by the Stop hook after each session.
+        Returns input/output/cache token counts and estimated cost in USD.
+        Use last_n to control how many recent sessions to show.
+        Use session_id to filter to a specific session."""
+        return get_token_usage(last_n=last_n, session_id=session_id)
 
     return mcp
 

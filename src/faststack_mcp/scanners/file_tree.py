@@ -12,7 +12,7 @@ class _Node:
     children: dict[str, "_Node"] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        payload = {
+        payload: dict[str, Any] = {
             "name": self.name,
             "path": self.path,
             "type": self.kind,
@@ -20,7 +20,7 @@ class _Node:
         if self.children:
             payload["children"] = [
                 child.to_dict()
-                for child in sorted(self.children.values(), key=lambda node: (node.kind == "file", node.name))
+                for child in sorted(self.children.values(), key=lambda n: (n.kind == "file", n.name))
             ]
         return payload
 
@@ -48,5 +48,5 @@ def build_tree(file_paths: list[str]) -> list[dict[str, object]]:
 
     return [
         node.to_dict()
-        for node in sorted(root.values(), key=lambda n: (n.kind == "file", n.name))
+        for node in sorted(root.values(), key=lambda x: (x.kind == "file", x.name))
     ]

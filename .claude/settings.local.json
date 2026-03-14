@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__faststack__get_project_outline",
+      "mcp__faststack__get_symbol",
+      "Bash(claude install:*)",
+      "mcp__faststack__list_projects",
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(python:*)",
+      "Bash(curl:*)",
+      "Read(//c/Users/91997/.local/share/cco/**)",
+      "Read(//c/Users/91997/.local/bin/**)",
+      "Bash(C:/Users/91997/.local/share/cco/cco:*)",
+      "Bash(docker:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(claude:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "faststack"
+  ]
+}
