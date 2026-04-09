@@ -1,5 +1,49 @@
 # faststack-mcp
 
+## Quick Start — How to Use
+
+**Step 1 — Install**
+```powershell
+pip install "git+https://github.com/Evaan-devlops/mcp.git"
+```
+
+**Step 2 — Add to Claude Code**
+
+Add this to your MCP config (e.g. `~/.claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "faststack": {
+      "command": "faststack-mcp"
+    }
+  }
+}
+```
+
+**Step 3 — Index your project**
+
+In Claude Code, tell Claude:
+> "Index my project at `/path/to/your/project`"
+
+Or use the tool directly:
+```
+index_folder("/path/to/your/project")   → returns project_id
+```
+
+**Step 4 — Use it**
+```
+get_project_outline(project_id)         → full project structure at a glance
+search_symbols(project_id, "MyClass")   → find any function, class, or route
+get_symbol(project_id, symbol_id)       → read the exact code snippet
+get_file_outline(project_id, "main.py") → all symbols in one file
+search_text(project_id, "some text")    → fallback text search
+get_file_tree(project_id)               → browse the file tree
+list_projects()                         → see all indexed projects
+invalidate_cache(project_id)            → force re-index after big changes
+```
+
+---
+
 `faststack-mcp` is a local-first, read-only MCP server for Claude Code that indexes and
 searches modern full-stack projects with focus on:
 
@@ -206,77 +250,4 @@ pytest
 - Backend/backend-like paths are grouped as routes, models/services/repos, and migrations.
 - `backend/rag_artifacts/` is detected as RAG storage; `manifest.json` and `chunks.jsonl`
   are treated as artifact metadata sources while `index.faiss` is metadata-only.
-
-   What feature and functionality are we getting from faststack-mcp? How is it beneficial for us?
-
-● Searched for 1 pattern, read 2 files (ctrl+o to expand)
-
-● Here's a clear breakdown of what faststack-mcp gives us:
-
-  ---
-  What is faststack-mcp?
-
-  A local-first, read-only MCP server that indexes your codebase and exposes it to Claude Code via structured tools —  
-  so Claude can navigate and understand large projects efficiently without reading every file blindly.
-
-  ---
-  Tools you Get (9 total)
-
-  ┌─────────────────────┬─────────────────────────────────────────────────────────────────┐
-  │        Tool         │                          What it does                           │
-  ├─────────────────────┼─────────────────────────────────────────────────────────────────┤
-  │ index_folder        │ Scans and indexes a project folder, returns project_id + stats  │
-  ├─────────────────────┼─────────────────────────────────────────────────────────────────┤
-  │ list_projects       │ Lists all previously indexed projects                           │
-  ├─────────────────────┼─────────────────────────────────────────────────────────────────┤
-  │ get_file_tree       │ Returns the filtered file tree of an indexed project            │
-  ├─────────────────────┼─────────────────────────────────────────────────────────────────┤
-  │ get_file_outline    │ Lists all symbols (functions, classes, routes) in a single file │
-  ├─────────────────────┼─────────────────────────────────────────────────────────────────┤
-  │ search_symbols      │ Ranked search for a symbol by name/kind/language                │
-  ├─────────────────────┼─────────────────────────────────────────────────────────────────┤
-  │ get_symbol          │ Fetches the exact code snippet for a specific symbol            │
-  ├─────────────────────┼─────────────────────────────────────────────────────────────────┤
-  │ search_text         │ Fallback text search with context windows                       │
-  ├─────────────────────┼─────────────────────────────────────────────────────────────────┤
-  │ get_project_outline │ High-level grouped summary of the whole project                 │
-  ├─────────────────────┼─────────────────────────────────────────────────────────────────┤
-  │ invalidate_cache    │ Clears a project's cached index to force re-indexing            │
-  └─────────────────────┴─────────────────────────────────────────────────────────────────┘
-
-  ---
-  Languages & Frameworks Supported
-
-  - Python / FastAPI (AST-based parsing)
-  - TypeScript / JavaScript / TSX / JSX (React frontends)
-  - SQL / migrations
-  - JSON / JSONL (including RAG artifact metadata)
-  - Config files: package.json, pyproject.toml, tsconfig.json, vite.config, eslint.config, tailwind.config,
-  .env.example, YAML, TOML, INI
-
-  ---
-  Key Benefits for Us
-
-  1. Faster codebase navigation — Instead of grepping raw files, Claude gets structured symbol maps. Finding
-  AuthService or a FastAPI route is instant.
-  2. Project outline in one call — get_project_outline gives a grouped summary (routes, models, services, components,  
-  hooks, store, migrations) without reading individual files.
-  3. Context window efficiency — Claude fetches only the relevant symbol snippet (get_symbol) rather than loading      
-  entire files, preserving context for actual reasoning.
-  4. Secure & local — No network access, no writes, no secret leakage (.env values are masked as ***MASKED***), cached 
-  locally under ~/.faststack-mcp/.
-  5. Full-stack aware — It understands both the backend (FastAPI routes, models, repos) and frontend (React pages,     
-  components, hooks, store, API layers) structure simultaneously.
-
-  ---
-  Practical Workflow
-
-  index_folder(".")          → get project_id
-  get_project_outline(id)    → understand full structure
-  search_symbols(id, "Foo")  → find a specific class/function
-  get_symbol(id, symbol_id)  → read exact code snippet
-  search_text(id, "query")   → fallback for non-symbol content
-
-  In short: it makes Claude significantly faster and more accurate on large codebases by replacing blind file reads    
-  with structured, indexed lookups.
 
