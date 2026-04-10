@@ -4,7 +4,7 @@
 
 **Step 1 — Install**
 ```powershell
-pip install "git+https://github.com/Evaan-devlops/mcp.git"
+pip install "git+https://github.com/Evaan-devlops/faststack-mcp.git"
 ```
 
 **Step 2 — Add to Claude Code**
@@ -155,7 +155,7 @@ pip install -e .
 ### GitHub install
 
 ```powershell
-pip install "git+https://github.com/Evaan-devlops/mcp.git"
+pip install "git+https://github.com/Evaan-devlops/faststack-mcp.git"
 ```
 
 ## Claude Code setup (example)
