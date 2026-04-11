@@ -502,6 +502,14 @@ def _extract_from_tree_sitter(
             declaration = node.child_by_field_name("declaration")
             if declaration is not None:
                 parse_node(declaration)
+                return
+            # export default function Foo / export default class Foo
+            for child in node.children:
+                if child.type in {"function_declaration", "class_declaration", "function"}:
+                    parse_node(child)
+            return
+
+        if node.type == "decorator":
             return
 
     for child in root.children:
@@ -522,7 +530,7 @@ def _regex_parse(file_path: Path, source: str, offsets: list[int]) -> list[Symbo
         r"(?m)^(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:\([^)]*\)|[^=\n;]+?)\s*=>"
     )
 
-    for match in re.finditer(r"(?m)^export\s+function\s+([A-Za-z_$][\w$]*)\s*\(", source):
+    for match in re.finditer(r"(?m)^export\s+(?:default\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(", source):
         name = match.group(1)
         start_line = source[:match.start(1)].count("\n") + 1
         signature = lines[start_line - 1].strip() if lines and start_line <= len(lines) else ""
@@ -649,6 +657,64 @@ def _regex_parse(file_path: Path, source: str, offsets: list[int]) -> list[Symbo
                 metadata={"frontend_category": category, "parser": "regex"},
             )
         )
+
+    # export default class Foo
+    for match in re.finditer(r"(?m)^export\s+default\s+class\s+([A-Za-z_$][\w$]*)", source):
+        name = match.group(1)
+        if any(item.name == name for item in symbols):
+            continue
+        line_no = source[:match.start(1)].count("\n") + 1
+        signature = lines[line_no - 1].strip() if lines and line_no <= len(lines) else ""
+        byte_start, byte_end = line_span_to_bytes(offsets, start_line=line_no, end_line=line_no, end_col=0)
+        lang = "javascript" if file_path.suffix.lower() in {".js", ".jsx"} else "typescript"
+        symbols.append(
+            Symbol(
+                id=make_symbol_id(file_path.as_posix(), name, "class"),
+                name=name,
+                qualified_name=name,
+                kind="class",
+                language=lang,
+                file_path=file_path.as_posix(),
+                line_start=line_no,
+                line_end=line_no,
+                byte_start=byte_start,
+                byte_end=byte_end,
+                signature=signature,
+                metadata={"frontend_category": category, "parser": "regex"},
+            )
+        )
+
+    # export { Foo, Bar as Baz } — named exports (not re-exports from other modules)
+    for match in re.finditer(r"(?m)^export\s*\{([^}]+)\}\s*(?!from)", source):
+        for name_part in match.group(1).split(","):
+            # take alias if present: "Foo as Bar" → "Bar"
+            parts = [p.strip() for p in name_part.strip().split(" as ")]
+            name = parts[-1]
+            if not re.match(r"^[A-Za-z_$][\w$]*$", name):
+                continue
+            if any(item.name == name for item in symbols):
+                continue
+            line_no = source[: match.start()].count("\n") + 1
+            signature = lines[line_no - 1].strip() if lines and line_no <= len(lines) else ""
+            byte_start, byte_end = line_span_to_bytes(offsets, start_line=line_no, end_line=line_no, end_col=0)
+            lang = "javascript" if file_path.suffix.lower() in {".js", ".jsx"} else "typescript"
+            kind = _resolve_kind("function", name, category, False)
+            symbols.append(
+                Symbol(
+                    id=make_symbol_id(file_path.as_posix(), name, kind),
+                    name=name,
+                    qualified_name=name,
+                    kind=kind,
+                    language=lang,
+                    file_path=file_path.as_posix(),
+                    line_start=line_no,
+                    line_end=line_no,
+                    byte_start=byte_start,
+                    byte_end=byte_end,
+                    signature=signature,
+                    metadata={"frontend_category": category, "parser": "regex"},
+                )
+            )
 
     return symbols
 

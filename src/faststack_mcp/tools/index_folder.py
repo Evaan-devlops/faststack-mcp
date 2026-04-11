@@ -195,6 +195,9 @@ def run(folder_path: str, force: bool = False, max_file_size: int | None = None,
     cache_file = cache_root() / "projects" / project_id / "index.json"
 
     signature: str | None = None
+    existing_files: dict[str, FileRecord] = {}
+    existing_symbols: dict[str, Symbol] = {}
+
     if cache_file.exists() and not force:
         try:
             existing = load_project(project_id)
@@ -209,6 +212,8 @@ def run(folder_path: str, force: bool = False, max_file_size: int | None = None,
                     "cached": True,
                     "path": existing.project_path,
                 }
+            existing_files = existing.files
+            existing_symbols = existing.symbols
         except Exception:
             pass
 
@@ -251,9 +256,22 @@ def run(folder_path: str, force: bool = False, max_file_size: int | None = None,
                 continue
 
             rel_path = full.relative_to(root).as_posix()
-            file_size = full.stat().st_size
+            stat = full.stat()
+            file_size = stat.st_size
             if file_size > max_file_size:
                 continue
+
+            # Incremental: reuse cached record when file is unchanged (same size + mtime)
+            if existing_files and not force:
+                cached_record = existing_files.get(rel_path)
+                if cached_record is not None:
+                    cached_mtime = (cached_record.metadata or {}).get("mtime_ns")
+                    if cached_mtime == stat.st_mtime_ns and cached_record.size == file_size:
+                        file_records[rel_path] = cached_record
+                        for sym_id in cached_record.symbols:
+                            if sym_id in existing_symbols:
+                                parser_results[sym_id] = existing_symbols[sym_id]
+                        continue
 
             if is_rag_artifact(full):
                 rag_metadata = {
@@ -262,6 +280,7 @@ def run(folder_path: str, force: bool = False, max_file_size: int | None = None,
                     "indexed": False,
                     "content_indexed": False,
                     "in_rag_artifacts": "rag_artifacts" in full.parts,
+                    "mtime_ns": stat.st_mtime_ns,
                 }
                 if full.name == "index.faiss":
                     rag_metadata["rag_artifact_type"] = "faiss_index"
@@ -317,6 +336,7 @@ def run(folder_path: str, force: bool = False, max_file_size: int | None = None,
 
             metadata: dict[str, object] = {
                 "parser": _PARSER_NAMES.get(parser, parser.__name__),
+                "mtime_ns": stat.st_mtime_ns,
             }
             if full.name.lower() == ".env.example":
                 metadata["env_template"] = True

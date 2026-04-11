@@ -11,9 +11,12 @@ from . import make_symbol_id
 PATTERNS = [
     ("table", re.compile(r"(?is)\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w.\"`'\[]+)")),
     ("alter_table", re.compile(r"(?is)\bALTER\s+TABLE\s+([\w.\"`'\[]+)")),
-    ("index", re.compile(r"(?is)\bCREATE\s+INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w.\"`'\[]+)")),
-    ("view", re.compile(r"(?is)\bCREATE\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w.\"`'\[]+)")),
+    ("index", re.compile(r"(?is)\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?([\w.\"`'\[]+)")),
+    ("view", re.compile(r"(?is)\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w.\"`'\[]+)")),
     ("insert", re.compile(r"(?is)\bINSERT\s+INTO\s+([\w.\"`'\[]+)")),
+    ("function", re.compile(r"(?is)\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([\w.\"`'\[]+)")),
+    ("procedure", re.compile(r"(?is)\bCREATE\s+(?:OR\s+REPLACE\s+)?PROCEDURE\s+([\w.\"`'\[]+)")),
+    ("trigger", re.compile(r"(?is)\bCREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER\s+([\w.\"`'\[]+)")),
 ]
 
 
