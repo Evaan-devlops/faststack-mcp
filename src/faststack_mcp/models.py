@@ -48,3 +48,5 @@ class ProjectIndex(BaseModel):
     symbols: dict[str, Symbol] = Field(default_factory=dict)
     errors: list[str] = Field(default_factory=list)
     stats: ProjectStats = Field(default_factory=ProjectStats)
+    # references_graph: symbol_name (lowercase) → ["relative/file.py:lineno", ...]
+    references_graph: dict[str, list[str]] = Field(default_factory=dict)

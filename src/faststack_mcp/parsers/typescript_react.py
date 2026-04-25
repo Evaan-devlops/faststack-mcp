@@ -9,6 +9,40 @@ from ..models import Symbol
 from ..utils.offsets import build_line_offsets, line_span_to_bytes
 from . import make_symbol_id
 
+# Top-level directory names that indicate the file is part of a TypeScript backend
+_BACKEND_TS_ROOT_DIRS: frozenset[str] = frozenset({
+    "ts-backend",
+    "go-backend",
+    "server",
+    "api-server",
+})
+
+# Subdirectory names inside a TypeScript backend → symbol kind
+_BACKEND_TS_SUBDIR_KIND: dict[str, str] = {
+    "routes": "backend_route",
+    "handlers": "backend_route",
+    "api": "backend_route",
+    "services": "backend_service",
+    "service": "backend_service",
+    "repositories": "backend_repository",
+    "repository": "backend_repository",
+    "repo": "backend_repository",
+    "domain": "backend_model",
+    "models": "backend_model",
+    "db": "backend_model",
+    "middleware": "backend_service",
+    "workers": "backend_service",
+    "worker": "backend_service",
+    "candle": "backend_service",
+    "strategy": "backend_service",
+    "execution": "backend_service",
+    "subscription": "backend_service",
+    "hub": "backend_service",
+    "dhan": "backend_service",
+    "observability": "backend_service",
+    "config": "backend_model",
+}
+
 ARROW_HOOK_RE = re.compile(r"(?m)^(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*[:=]")
 CLASS_USAGE = {
     "page.tsx",
@@ -106,7 +140,33 @@ def _arrow_or_function_returns_jsx(node: Any) -> bool:
     return _contains_jsx(body)
 
 
+def _infer_backend_ts_category(path: Path) -> str | None:
+    """Return a backend_* category if the file lives inside a known TypeScript backend root dir."""
+    parts = [part.lower() for part in path.as_posix().split("/") if part]
+    for marker in _BACKEND_TS_ROOT_DIRS:
+        if marker in parts:
+            marker_idx = parts.index(marker)
+            sub_parts = parts[marker_idx + 1:]
+            # Strip leading 'src' or 'tests'/'test'
+            if sub_parts and sub_parts[0] in ("src",):
+                sub_parts = sub_parts[1:]
+            for part in sub_parts:
+                clean = part.split(".")[0]  # strip file extensions from directory-like names
+                if clean in _BACKEND_TS_SUBDIR_KIND:
+                    return _BACKEND_TS_SUBDIR_KIND[clean]
+            # File is inside the backend root but in an unrecognised subdir
+            if sub_parts and sub_parts[0] not in ("tests", "test", "migrations", "node_modules"):
+                return "backend_service"
+            return None
+    return None
+
+
 def _infer_frontend_category(path: Path) -> str | None:
+    # Check for backend TypeScript paths first — return early if matched
+    backend_cat = _infer_backend_ts_category(path)
+    if backend_cat is not None:
+        return backend_cat
+
     parts = [part.lower() for part in path.as_posix().split("/") if part]
     if "src" in parts:
         parts = parts[parts.index("src") + 1 :]
@@ -141,6 +201,12 @@ def _infer_frontend_category(path: Path) -> str | None:
 
 
 def _resolve_kind(base_kind: str, name: str, category: str | None, has_jsx: bool) -> str:
+    # Preserve backend TypeScript categories — do not map to frontend kinds
+    if category is not None and category.startswith("backend_"):
+        if base_kind in {"type", "interface", "class"}:
+            return base_kind
+        return category
+
     if base_kind in {"type", "interface", "class"}:
         return base_kind
 
@@ -271,6 +337,11 @@ def _add_file_scope_symbol(
         "api": "api",
         "utils": "utils",
         "types": "types",
+        # Backend TypeScript categories
+        "backend_route": "backend_route",
+        "backend_service": "backend_service",
+        "backend_repository": "backend_repository",
+        "backend_model": "backend_model",
     }
     mapped = kind_map.get(category)
     if mapped is None:
@@ -335,35 +406,41 @@ def _set_parser_language(parser: Any, language: Any) -> bool:
 @functools.lru_cache(maxsize=4)
 def _load_tree_sitter_parser(file_ext: str):
     try:
-        from tree_sitter import Parser  # type: ignore
+        from tree_sitter import Parser, Language  # type: ignore
     except Exception:
         return None, None
+
+    want_tsx = file_ext in {".tsx", ".jsx"}
+
+    def _wrap_lang(raw: Any) -> Any:
+        try:
+            return Language(raw)
+        except Exception:
+            return raw
+
     try:
         from tree_sitter_typescript import language as ts_language  # type: ignore
-
-        language = ts_language("tsx" if file_ext in {".tsx", ".jsx"} else "typescript")
-        return Parser, language
+        raw = ts_language("tsx" if want_tsx else "typescript")
+        return Parser, _wrap_lang(raw)
     except Exception:
         pass
     try:
         import tree_sitter_typescript as ts_pkg  # type: ignore
 
-        preferred = ("tsx", "typescript") if file_ext in {".tsx", ".jsx"} else ("typescript", "tsx")
+        preferred = ("tsx", "typescript") if want_tsx else ("typescript", "tsx")
         for mod_name in preferred:
             mod = getattr(ts_pkg, mod_name, None)
             if mod is None:
                 continue
             language_attr = getattr(mod, "language", None)
             if language_attr is not None:
-                return Parser, language_attr
+                return Parser, _wrap_lang(language_attr)
 
         for fn_name in ("language_tsx", "tsx_language", "language_typescript", "typescript_language"):
             fn = getattr(ts_pkg, fn_name, None)
             if callable(fn):
-                if ("tsx" in fn_name and file_ext in {".tsx", ".jsx"}) or (
-                    "typescript" in fn_name and file_ext not in {".tsx", ".jsx"}
-                ):
-                    return Parser, fn
+                if ("tsx" in fn_name and want_tsx) or ("typescript" in fn_name and not want_tsx):
+                    return Parser, _wrap_lang(fn())
     except Exception:
         pass
     return None, None
@@ -378,9 +455,12 @@ def _extract_from_tree_sitter(
     if Parser is None or language is None:
         return []
 
-    parser = Parser()
-    if not _set_parser_language(parser, language):
-        raise RuntimeError("tree-sitter language adapter unavailable")
+    try:
+        parser = Parser(language)
+    except TypeError:
+        parser = Parser()
+        if not _set_parser_language(parser, language):
+            raise RuntimeError("tree-sitter language adapter unavailable")
 
     tree = parser.parse(source.encode("utf-8"))
     root = tree.root_node
@@ -530,7 +610,7 @@ def _regex_parse(file_path: Path, source: str, offsets: list[int]) -> list[Symbo
         r"(?m)^(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:\([^)]*\)|[^=\n;]+?)\s*=>"
     )
 
-    for match in re.finditer(r"(?m)^export\s+(?:default\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(", source):
+    for match in re.finditer(r"(?m)^export\s+(?:default\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(", source):
         name = match.group(1)
         start_line = source[:match.start(1)].count("\n") + 1
         signature = lines[start_line - 1].strip() if lines and start_line <= len(lines) else ""

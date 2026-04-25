@@ -38,4 +38,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [project.optional-dependencies]
-test = ["pytest>=8.0"]
+postgres = ["psycopg2-binary>=2.9"]
+watch    = ["watchfiles>=0.21"]
+all      = ["psycopg2-binary>=2.9", "watchfiles>=0.21"]
+test     = ["pytest>=8.0"]

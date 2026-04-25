@@ -177,9 +177,13 @@ def _build_and_cache(project_id: str, project) -> None:
         bucket = _symbol_bucket(kind)
         metadata = symbol.metadata or {}
 
-        if kind == "route":
+        if kind in {"route", "backend_route"}:
             _append(groups, "backend_routes", _symbol_entry(symbol))
-        elif kind in {"pydantic_model", "model", "service", "repository", "class", "method"}:
+        elif kind in {
+            "pydantic_model", "model", "service", "repository", "class", "method",
+            # TypeScript backend kinds
+            "backend_service", "backend_repository", "backend_model",
+        }:
             _append(groups, "backend_models_services_repos", _symbol_entry(symbol))
 
         elif bucket in {

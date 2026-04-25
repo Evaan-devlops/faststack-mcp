@@ -21,6 +21,8 @@ def infer_languages_and_frameworks(
             frameworks.add("RAG")
         if rec.metadata.get("env_template") or rec.metadata.get("env_file") or path.endswith(".env.example"):
             frameworks.add("Environment")
+        if path.endswith("bunfig.toml") or "bun.lockb" in path:
+            frameworks.add("Bun")
 
     detected_languages = sorted(languages)
 
@@ -32,6 +34,9 @@ def infer_languages_and_frameworks(
         kind = str(symbol.get("kind", ""))
         if kind in {"route", "pydantic_model"}:
             frameworks.add("FastAPI")
+        if kind in {"backend_route", "backend_service", "backend_repository", "backend_model"}:
+            frameworks.add("Fastify")
+            frameworks.add("TypeScript")
         if kind in {
             "component",
             "hook",

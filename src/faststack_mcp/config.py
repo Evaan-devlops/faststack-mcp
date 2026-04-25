@@ -30,6 +30,7 @@ SUPPORTED_EXACT_FILES = {
     "tsconfig.node.json",
     "index.faiss",
     "chunks.jsonl",
+    "bunfig.toml",
 }
 
 SUPPORTED_EXTENSIONS = {

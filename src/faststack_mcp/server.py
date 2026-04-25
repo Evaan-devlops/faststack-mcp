@@ -3,6 +3,8 @@ from __future__ import annotations
 from mcp.server.fastmcp import FastMCP
 
 from .config import DEFAULT_SEARCH_LIMIT, DEFAULT_TEXT_SEARCH_LIMIT
+from .tools.find_references import run as find_references
+from .tools.get_file_context import run as get_file_context
 from .tools.get_file_outline import run as get_file_outline
 from .tools.get_file_tree import run as get_file_tree
 from .tools.get_project_outline import run as get_project_outline
@@ -24,14 +26,18 @@ def create_server() -> FastMCP:
         force: bool = False,
         max_file_size: int = 2 * 1024 * 1024,
         include_env_files: bool = False,
+        watch: bool = False,
     ) -> dict:
         """Index a project folder and cache the result. Safe to call on every agent turn —
-        warm cache hits return in ~50ms. Use force=True only when you suspect the cache is stale."""
+        warm cache hits return in ~50ms. Use force=True only when you suspect the cache is stale.
+        Set watch=True to start a background file watcher that auto-re-indexes on changes
+        (requires watchfiles: pip install watchfiles)."""
         return index_folder(
             path,
             force=force,
             max_file_size=max_file_size,
             include_env_files=include_env_files,
+            watch=watch,
         )
 
     @mcp.tool(name="list_projects")
@@ -122,10 +128,39 @@ def create_server() -> FastMCP:
     def get_token_usage_tool(last_n: int = 20, session_id: str | None = None) -> dict:
         """Show token consumption per Claude Code session.
         Reads the log written by the Stop hook after each session.
-        Returns input/output/cache token counts and estimated cost in USD.
+        Returns input/output/cache token counts, estimated cost, per-session averages,
+        and per-tool breakdown (if hook logs tool_calls field).
         Use last_n to control how many recent sessions to show.
         Use session_id to filter to a specific session."""
         return get_token_usage(last_n=last_n, session_id=session_id)
+
+    @mcp.tool(name="find_references")
+    def find_references_tool(
+        project_id: str,
+        symbol_name: str,
+        limit: int = 50,
+    ) -> dict:
+        """Find all files where symbol_name is imported or used.
+        Uses the import graph built during indexing (fast) plus a whole-word text search fallback.
+        Returns results grouped by file with line numbers and context.
+        Example: find_references(project_id, 'get_db') →
+          [{file_path: 'users.py', usages: [{line: 5, context: 'from db import get_db'}]}, ...]
+        Use before modifying a symbol to understand its blast radius."""
+        return find_references(project_id, symbol_name=symbol_name, limit=limit)
+
+    @mcp.tool(name="get_file_context")
+    def get_file_context_tool(
+        project_id: str,
+        file_path: str,
+        around_line: int,
+        radius: int = 40,
+    ) -> dict:
+        """Read lines surrounding a specific line in a project file.
+        Useful when get_symbol is too narrow — shows the full context window.
+        The target line is marked with '>>>' in the output.
+        Example: get_file_context(project_id, 'src/db.py', 120, radius=40)
+        returns lines 80-160 with line 120 highlighted."""
+        return get_file_context(project_id, file_path=file_path, around_line=around_line, radius=radius)
 
     return mcp
 

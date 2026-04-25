@@ -11,6 +11,7 @@ from ..parsers.config_parser import parse_file as parse_config
 from ..parsers.env_parser import parse_file as parse_env
 from ..parsers.json_parser import parse_file as parse_json
 from ..parsers.python_fastapi import parse_file as parse_python
+from ..parsers.reference_extractor import extract_references, merge_references
 from ..parsers.sql_parser import parse_file as parse_sql
 from ..parsers.typescript_react import parse_file as parse_typescript
 from ..scanners.filters import (
@@ -25,7 +26,7 @@ from ..scanners.filters import (
 )
 from ..scanners.project_detector import infer_languages_and_frameworks
 from ..security import SecurityError
-from ..storage import cache_root, load_project, save_project
+from ..storage import cache_root, load_project, project_exists, save_project
 from ..utils.hashing import file_hash, project_id_for_path
 
 MAX_FILE_SIZE = DEFAULT_MAX_FILE_SIZE_BYTES
@@ -183,7 +184,7 @@ def _update_symbol_ids(parsed_symbols: list[Symbol], rel_path: str) -> tuple[lis
     return symbol_ids, parsed_symbols
 
 
-def run(folder_path: str, force: bool = False, max_file_size: int | None = None, include_env_files: bool = False) -> dict[str, object]:
+def run(folder_path: str, force: bool = False, max_file_size: int | None = None, include_env_files: bool = False, watch: bool = False) -> dict[str, object]:
     root = Path(folder_path).expanduser().resolve()
     if not root.exists():
         raise SecurityError(f"Folder does not exist: {root}")
@@ -192,13 +193,12 @@ def run(folder_path: str, force: bool = False, max_file_size: int | None = None,
 
     project_id = project_id_for_path(root)
     max_file_size = max_file_size or MAX_FILE_SIZE
-    cache_file = cache_root() / "projects" / project_id / "index.json"
 
     signature: str | None = None
     existing_files: dict[str, FileRecord] = {}
     existing_symbols: dict[str, Symbol] = {}
 
-    if cache_file.exists() and not force:
+    if project_exists(project_id) and not force:
         try:
             existing = load_project(project_id)
             signature = _compute_signature(root, include_env_files)
@@ -211,6 +211,8 @@ def run(folder_path: str, force: bool = False, max_file_size: int | None = None,
                     "frameworks": existing.stats.frameworks,
                     "cached": True,
                     "path": existing.project_path,
+                    "references_indexed": sum(len(v) for v in existing.references_graph.values()),
+                    "watch_active": False,
                 }
             existing_files = existing.files
             existing_symbols = existing.symbols
@@ -222,6 +224,7 @@ def run(folder_path: str, force: bool = False, max_file_size: int | None = None,
 
     parser_results: dict[str, Symbol] = {}
     file_records: dict[str, FileRecord] = {}
+    references_graph: dict[str, list[str]] = {}
     errors: list[str] = []
 
     for path, dir_names, file_names in os.walk(root):
@@ -324,6 +327,10 @@ def run(folder_path: str, force: bool = False, max_file_size: int | None = None,
                 errors.append(f"{rel_path}: parse error: {exc}")
                 continue
 
+            # Build cross-reference graph from import declarations
+            file_refs = extract_references(full, content, rel_path)
+            references_graph = merge_references(references_graph, file_refs)
+
             line_count = len(content.splitlines())
             digest = file_hash(content.encode("utf-8"))
             symbol_ids: list[str] = []
@@ -376,6 +383,34 @@ def run(folder_path: str, force: bool = False, max_file_size: int | None = None,
         symbols=parser_results,
         errors=errors,
         stats=stats,
+        references_graph=references_graph,
     )
     save_project(index)
-    return index.model_dump()
+
+    # Optional file watcher: auto-invalidates cache on change, then re-indexes
+    if watch:
+        from ..watcher import is_available, start_watching
+
+        def _on_change(pid: str) -> None:
+            try:
+                run(folder_path, force=True, max_file_size=max_file_size,
+                    include_env_files=include_env_files, watch=False)
+            except Exception:
+                pass
+
+        watcher_started = start_watching(project_id, root.as_posix(), _on_change)
+    else:
+        watcher_started = False
+
+    result = {
+        "project_id": index.project_id,
+        "files_indexed": len(index.files),
+        "symbols_indexed": len(index.symbols),
+        "languages": index.stats.languages,
+        "frameworks": index.stats.frameworks,
+        "cached": False,
+        "path": index.project_path,
+        "references_indexed": sum(len(v) for v in references_graph.values()),
+        "watch_active": watcher_started,
+    }
+    return result

@@ -60,8 +60,11 @@ def is_binary_file(path: Path) -> bool:
         sample = handle.read(BINARY_CHUNK_SIZE)
     if b"\x00" in sample:
         return True
-    text_like = all((32 <= b < 127) or b in {9, 10, 13, 0} for b in sample)
-    return not text_like
+    try:
+        sample.decode("utf-8")
+        return False
+    except UnicodeDecodeError:
+        return True
 
 
 def read_text_safe(path: Path, max_bytes: int) -> str:
